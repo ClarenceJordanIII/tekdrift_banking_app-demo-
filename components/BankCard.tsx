@@ -52,7 +52,7 @@ const BankCard = ({
         </Link>
       }
 
-      {showBalance && <Copy title={account?.sharaebleId} />}
+      {showBalance && <Copy title={account?.shareableId} />}
     </div>
   );
 };
