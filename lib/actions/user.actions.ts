@@ -45,6 +45,12 @@ export const getUserInfo = async ({ userId }: getUserInfoProps) => {
 export const signIn = async ({ email, password }: signInProps) => {
   try {
     const { account } = await createAdminClient();
+    
+    // Check if credentials are provided
+    if (!email || !password) {
+      throw new Error("Please provide both email and password.");
+    }
+
     const session = await account.createEmailPasswordSession(email, password);
 
     cookies().set("appwrite-session", session.secret, {
@@ -67,8 +73,10 @@ export const signIn = async ({ email, password }: signInProps) => {
       throw new Error("No account found with this email. Please sign up first.");
     } else if (error.type === 'general_rate_limit_exceeded') {
       throw new Error("Too many login attempts. Please wait a few minutes and try again.");
+    } else if (error.message && error.message.includes("AppwriteException")) {
+      throw new Error("Authentication service error. Please check your configuration and try again.");
     } else {
-      throw new Error("Failed to sign in. Please try again.");
+      throw new Error(error.message || "Failed to sign in. Please try again.");
     }
   }
 };
@@ -88,14 +96,25 @@ export const signUp = async ({ password, ...userData }: SignUpParams) => {
 
     if (!newUserAccount) throw new Error("Error creating new user");
 
-    const dwollaCustomerUrl = await createDwollaCustomer({
-      ...userData,
-      type: "personal",
-    });
+    // Try to create Dwolla customer, but don't fail signup if it fails
+    let dwollaCustomerUrl = null;
+    let dwollaCustomerId = null;
+    
+    try {
+      dwollaCustomerUrl = await createDwollaCustomer({
+        ...userData,
+        type: "personal",
+      });
+      
+      if (dwollaCustomerUrl) {
+        dwollaCustomerId = extractCustomerIdFromUrl(dwollaCustomerUrl);
+        console.log("Dwolla customer created successfully:", dwollaCustomerId);
+      }
+    } catch (dwollaError: any) {
+      console.warn("Dwolla customer creation failed, continuing with signup:", dwollaError);
+      // Don't throw here, let the user signup succeed without Dwolla initially
+    }
 
-    if (!dwollaCustomerUrl) throw new Error("Error creating dwolla customer");
-
-    const dwollaCustomerId = extractCustomerIdFromUrl(dwollaCustomerUrl);
     const newUser = await database.createDocument(
       DATABASE_ID!,
       USER_COLLECTION_ID!,
@@ -103,8 +122,8 @@ export const signUp = async ({ password, ...userData }: SignUpParams) => {
       {
         email: userData.email,
         name: `${userData.firstName} ${userData.lastName}`,
-        dwollaCustomerId,
-        dwollaCustomerUrl,
+        dwollaCustomerId: dwollaCustomerId || null,
+        dwollaCustomerUrl: dwollaCustomerUrl || null,
         firstName: userData.firstName,
         lastName: userData.lastName,
         address1: userData.address1,
@@ -282,16 +301,26 @@ export const exchangePublicToken = async ({
     );
     const processorToken = processorTokenResponse.data.processor_token;
     
-    // create a funding source URL for the account using the Dwolla customer Id,
+    // Create a funding source URL for the account using the Dwolla customer Id,
     // processor token, and bank name
-    const fundingSourceUrl = await addFundingSource({
-      dwollaCustomerId: user.dwollaCustomerId,
-      processorToken,
-      bankName: accountData.name,
-    });
-
-    if (!fundingSourceUrl) {
-      throw new Error("Failed to create or retrieve funding source URL from Dwolla");
+    let fundingSourceUrl = null;
+    
+    // Check if user has Dwolla customer ID
+    if (user.dwollaCustomerId) {
+      try {
+        fundingSourceUrl = await addFundingSource({
+          dwollaCustomerId: user.dwollaCustomerId,
+          processorToken,
+          bankName: accountData.name,
+        });
+        console.log("Funding source created successfully:", fundingSourceUrl);
+      } catch (dwollaError: any) {
+        console.warn("Dwolla funding source creation failed:", dwollaError);
+        // Continue without Dwolla for now
+        console.log("Continuing bank connection without Dwolla integration");
+      }
+    } else {
+      console.log("User doesn't have Dwolla customer ID, skipping funding source creation");
     }
     
     // Generate shareableId

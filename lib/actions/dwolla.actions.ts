@@ -11,23 +11,36 @@ const getEnvironment = (): "production" | "sandbox" => {
     case "production":
       return "production";
     default:
-      throw new Error(
-        "Dwolla environment should either be set to `sandbox` or `production`"
-      );
+      return "sandbox"; // Default to sandbox instead of throwing
   }
 };
 
-const dwollaClient = new Client({
-  environment: getEnvironment(),
-  key: process.env.DWOLLA_KEY as string,
-  secret: process.env.DWOLLA_SECRET as string,
-});
+// Initialize Dwolla client only if environment variables are available
+let dwollaClient: Client | null = null;
+
+try {
+  if (process.env.DWOLLA_KEY && process.env.DWOLLA_SECRET) {
+    dwollaClient = new Client({
+      environment: getEnvironment(),
+      key: process.env.DWOLLA_KEY as string,
+      secret: process.env.DWOLLA_SECRET as string,
+    });
+  } else {
+    console.warn("Dwolla credentials not found, payment features will be disabled");
+  }
+} catch (err) {
+  console.error("Failed to initialize Dwolla client:", err);
+}
 
 // Create a Dwolla Funding Source using a Plaid Processor Token
 export const createFundingSource = async (
   options: CreateFundingSourceOptions
 ) => {
   try {
+    if (!dwollaClient) {
+      throw new Error("Dwolla client not initialized. Payment features are disabled.");
+    }
+    
     return await dwollaClient
       .post(`customers/${options.customerId}/funding-sources`, {
         name: options.fundingSourceName,
@@ -36,6 +49,10 @@ export const createFundingSource = async (
       .then((res) => res.headers.get("location"));
   } catch (err: any) {
     console.error("Creating a Funding Source Failed: ", err);
+    
+    if (!dwollaClient) {
+      return null; // Return null instead of throwing when Dwolla is not available
+    }
     
     // Handle DuplicateResource error (bank account already exists)
     if (err.body?.code === "DuplicateResource") {
@@ -98,6 +115,10 @@ export const createFundingSource = async (
 
 export const createOnDemandAuthorization = async () => {
   try {
+    if (!dwollaClient) {
+      throw new Error("Dwolla client not initialized. Payment features are disabled.");
+    }
+    
     const onDemandAuthorization = await dwollaClient.post(
       "on-demand-authorizations"
     );
@@ -105,6 +126,7 @@ export const createOnDemandAuthorization = async () => {
     return authLink;
   } catch (err) {
     console.error("Creating an On Demand Authorization Failed: ", err);
+    return null;
   }
 };
 
@@ -113,12 +135,17 @@ export const createDwollaCustomer = async (
 ) => {
   
   try {
+    if (!dwollaClient) {
+      throw new Error("Dwolla client not initialized. Payment features are disabled.");
+    }
+    
     return await dwollaClient
       .post("customers", newCustomer)
       .then((res) => res.headers.get("location"));
   } catch (err) {
     
     console.error("Creating a Dwolla Customer Failed: ", err);
+    return null;
   }
 };
 
@@ -129,6 +156,10 @@ export const createTransfer = async ({
 }: TransferParams) => {
   
   try {
+    if (!dwollaClient) {
+      throw new Error("Dwolla client not initialized. Payment features are disabled.");
+    }
+    
     const requestBody = {
       _links: {
         source: {
@@ -149,6 +180,7 @@ export const createTransfer = async ({
   } catch (err) {
  
     console.error("Transfer fund failed: ", err);
+    return null;
   }
 };
 
