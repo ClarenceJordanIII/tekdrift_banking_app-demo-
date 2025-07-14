@@ -12,6 +12,22 @@ const TransactionHistory = async ({
   const currentPage = Number(page as string) || 1;
 
   const loggedIn = await getLoggedInUser();
+  
+  // Check if user is properly logged in
+  if (!loggedIn || !loggedIn.$id) {
+    return (
+      <section className="transactions">
+        <div className="transactions-header">
+          <ErrorDisplay 
+            error="User not authenticated. Please sign in again."
+            title="Authentication Error"
+            showPlaidCredentials={false}
+          />
+        </div>
+      </section>
+    );
+  }
+
   const accounts = await getAccounts({ userId: loggedIn.$id });
   
   // Check for errors from getAccounts

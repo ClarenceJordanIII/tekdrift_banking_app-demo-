@@ -7,6 +7,22 @@ import { getLoggedInUser } from "@/lib/actions/user.actions";
 
 const Mybanks = async () => {
   const loggedIn = await getLoggedInUser();
+  
+  // Check if user is properly logged in
+  if (!loggedIn || !loggedIn.$id) {
+    return (
+      <section className="flex">
+        <div className="my-banks">
+          <ErrorDisplay 
+            error="User not authenticated. Please sign in again."
+            title="Authentication Error"
+            showPlaidCredentials={false}
+          />
+        </div>
+      </section>
+    );
+  }
+
   const accounts = await getAccounts({ userId: loggedIn.$id });
   
   // Check for errors from getAccounts

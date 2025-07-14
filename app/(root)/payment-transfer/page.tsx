@@ -6,6 +6,20 @@ import { getLoggedInUser } from "@/lib/actions/user.actions";
 
 const Transfer = async () => {
   const loggedIn = await getLoggedInUser();
+  
+  // Check if user is properly logged in
+  if (!loggedIn || !loggedIn.$id) {
+    return (
+      <section className="payment-transfer">
+        <ErrorDisplay 
+          error="User not authenticated. Please sign in again."
+          title="Authentication Error"
+          showPlaidCredentials={false}
+        />
+      </section>
+    );
+  }
+
   const accounts = await getAccounts({ userId: loggedIn.$id });
   
   // Check for errors from getAccounts

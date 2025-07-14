@@ -5,10 +5,10 @@
   "scripts": {
     "dev": "next dev --turbo",
     "build": "next build",
-    "build:no-lint": "SKIP_ENV_VALIDATION=true next build",
+    "build:no-lint": "next build",
     "start": "next start",
     "lint": "next lint",
-    "clean": " rm -rf .next",
+    "clean": "rmdir /s /q .next || echo Cache cleared",
     "clean:build": "npm run clean && npm run build:no-lint",
     "deploy": "npm run clean && npm run build:no-lint && npm run start"
   },
